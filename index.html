@@ -284,7 +284,11 @@ function drawTrains(trains) {
 
 
 // ★ 行き先＋両数（⑧など）を合成
-const infoText = ` ${type} ${train.dest.text}`;
+const destText = (train.dest && train.dest.text)
+  ? train.dest.text
+  : "";
+
+const infoText = ` ${type} ${destText}`;
 
     const noW = ctx.measureText(noText).width + 10;
     const infoW = ctx.measureText(infoText).width + 10;
@@ -384,5 +388,6 @@ setInterval(update, 60000);
 </body>
 
 </html>
+
 
 
