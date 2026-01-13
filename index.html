@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>JR神戸線列車走行位置(西明石～三石間)</title>
+<title>JR山陽線列車走行位置(上郡～三原間)</title>
 
 <style>
   body {
@@ -55,26 +55,37 @@ let fetching = false;
 // 駅データ
 // ===============================
 const stations = [
-  {code: "0442", name: "西明石", x: 500},
-  {code: "0443", name: "大久保", x: 1200},
-  {code: "0444", name: "魚住", x: 1900},
-  {code: "0445", name: "土山", x: 2600},
-  {code: "0446", name: "東加古川", x: 3300},
-  {code: "0447", name: "加古川", x: 4000},
-  {code: "0448", name: "宝殿", x: 4700},
-  {code: "0449", name: "曽根", x: 5400},
-  {code: "0450", name: "ひめじ別所", x: 6100},
-  {code: "0451", name: "御着", x: 6800},
-  {code: "0465", name: "東姫路", x: 7500},
-  {code: "0452", name: "姫路", x: 8200},
-  {code: "0453", name: "英賀保", x: 8900},
-  {code: "0463", name: "はりま勝原", x: 9600},
-  {code: "0454", name: "網干", x: 10300},
-  {code: "0455", name: "竜野", x: 11000},
-  {code: "0456", name: "相生", x: 11700},
-  {code: "0457", name: "有年", x: 12400},
-  {code: "0458", name: "上郡", x: 13100},
-  {code: "0459", name: "三石", x: 13800},
+  {code: "0265", name: "上郡", x: 500},
+  {code: "0266", name: "三石", x: 1200},
+  {code: "0267", name: "吉永", x: 1900},
+  {code: "0268", name: "和気", x: 2600},
+  {code: "0269", name: "熊山", x: 3300},
+  {code: "0270", name: "万富", x: 4000},
+  {code: "0271", name: "瀬戸", x: 4700},
+  {code: "0272", name: "上道", x: 5400},
+  {code: "0273", name: "東岡山", x: 6100},
+  {code: "0274", name: "高島", x: 6800},
+  {code: "0275", name: "西川原", x: 7500},
+  {code: "0245", name: "岡山", x: 8200},
+  {code: "0277", name: "北長瀬", x: 8900},
+  {code: "0278", name: "庭瀬", x: 9600},
+  {code: "0279", name: "中庄", x: 10300},
+  {code: "0075", name: "倉敷", x: 11000},
+  {code: "0280", name: "西阿知", x: 11700},
+  {code: "0281", name: "新倉敷", x: 12400},
+  {code: "0282", name: "金光", x: 13100},
+  {code: "0283", name: "鴨方", x: 13800},
+  {code: "0284", name: "里庄", x: 14500},
+  {code: "0285", name: "笠岡", x: 15200},
+  {code: "0286", name: "大門", x: 15900},
+  {code: "0287", name: "東福山", x: 16600},
+  {code: "0288", name: "福山", x: 17300},
+  {code: "0289", name: "備後赤坂", x: 18000},
+  {code: "0290", name: "松永", x: 18700},
+  {code: "0291", name: "東尾道", x: 19400},
+  {code: "0292", name: "尾道", x: 20100},
+  {code: "0106", name: "糸崎", x: 20800},
+  {code: "0107", name: "三原", x: 21500},
 ];
 
 const TRACK_MARGIN = 500;
@@ -383,4 +394,5 @@ update();
 setInterval(update, 60000);
 </script>
 </body>
+
 </html>
