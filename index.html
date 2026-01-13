@@ -280,16 +280,13 @@ function drawTrains(trains) {
     const delay = train.delayMinutes || 0;
     const delayText = delay > 0 ? String(delay) : "";
 
-    const noText = train.no;
+    const noText = train.no || "";
 
 
 // ★ 行き先＋両数（⑧など）を合成
-const destText = (train.dest && train.dest.text)
-  ? train.dest.text
-  : "";
+const destText = train.dest || ""; // ← ここを修正
 
 const infoText = ` ${type} ${destText}`;
-
     const noW = ctx.measureText(noText).width + 10;
     const infoW = ctx.measureText(infoText).width + 10;
     const delayW = delayText ? ctx.measureText(delayText).width + 8 : 0;
@@ -388,6 +385,7 @@ setInterval(update, 60000);
 </body>
 
 </html>
+
 
 
 
