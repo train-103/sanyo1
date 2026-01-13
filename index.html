@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>JR神戸線列車走行位置(西明石～三石間)</title>
+
+<style>
+  body {
+    background-color: #5A9FE0;
+    margin: 0;
+    font-family: monospace;
+    overflow: hidden;
+  }
+
+  #time {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    color: white;
+    font-size: 14px;
+    z-index: 10;
+  }
+
+  #scroll-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+  }
+</style>
+</head>
+
+<body>
+<div id="time"></div>
+
+<div id="scroll-container">
+  <canvas id="bg"></canvas>
+  <canvas id="panel"></canvas>
+</div>
+
+<script>
+let lastTrains = [];
+let fetching = false;
+
+// ===============================
+// 駅データ
+// ===============================
+const stations = [
+  {code: "0442", name: "西明石", x: 500},
+  {code: "0443", name: "大久保", x: 1200},
+  {code: "0444", name: "魚住", x: 1900},
+  {code: "0445", name: "土山", x: 2600},
+  {code: "0446", name: "東加古川", x: 3300},
+  {code: "0447", name: "加古川", x: 4000},
+  {code: "0448", name: "宝殿", x: 4700},
+  {code: "0449", name: "曽根", x: 5400},
+  {code: "0450", name: "ひめじ別所", x: 6100},
+  {code: "0451", name: "御着", x: 6800},
+  {code: "0465", name: "東姫路", x: 7500},
+  {code: "0452", name: "姫路", x: 8200},
+  {code: "0453", name: "英賀保", x: 8900},
+  {code: "0463", name: "はりま勝原", x: 9600},
+  {code: "0454", name: "網干", x: 10300},
+  {code: "0455", name: "竜野", x: 11000},
+  {code: "0456", name: "相生", x: 11700},
+  {code: "0457", name: "有年", x: 12400},
+  {code: "0458", name: "上郡", x: 13100},
+  {code: "0459", name: "三石", x: 13800},
+];
+
+const TRACK_MARGIN = 500;
+
+// ★ 複線仕様（旧 up2 / down1）
+const TRACK_Y = {
+  up: 240,
+  down: 420
+};
+
+const bg = document.getElementById("bg");
+const bgCtx = bg.getContext("2d");
+
+const canvas = document.getElementById("panel");
+const ctx = canvas.getContext("2d");
+
+const trackStartX = Math.min(...stations.map(s => s.x)) - TRACK_MARGIN;
+const trackEndX   = Math.max(...stations.map(s => s.x)) + TRACK_MARGIN;
+
+bg.width = canvas.width = trackEndX;
+bg.height = canvas.height = 800;
+
+// ===============================
+// 背景描画
+// ===============================
+function drawTrack(c) {
+  c.strokeStyle = "white";
+  c.lineWidth = 2;
+
+  Object.values(TRACK_Y).forEach(y => {
+    c.beginPath();
+    c.moveTo(trackStartX, y);
+    c.lineTo(trackEndX, y);
+    c.stroke();
+  });
+}
+
+function drawStations(c) {
+  c.font = "14px monospace";
+
+  stations.forEach(st => {
+    c.fillStyle = "white";
+    c.fillRect(st.x - 2, TRACK_Y.up - 2, 4, 4);
+    c.fillRect(st.x - 2, TRACK_Y.down - 2, 4, 4);
+
+    drawStationLabel(st, 80, true, c);
+    drawStationLabel(st, 620, false, c);
+  });
+}
+
+function drawBackground() {
+  bgCtx.clearRect(0, 0, bg.width, bg.height);
+  drawTrack(bgCtx);
+  drawStations(bgCtx);
+}
+
+const stationHitAreas = [];
+
+function drawStationLabel(st, y, clickable, c) {
+  const text = st.name;
+  const w = c.measureText(text).width + 14;
+  const h = 22;
+  const x = st.x - w / 2;
+
+  c.fillStyle = "white";
+  c.fillRect(x, y - h / 2, w, h);
+  c.strokeStyle = "#333";
+  c.strokeRect(x, y - h / 2, w, h);
+
+  c.fillStyle = "black";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText(text, st.x, y);
+
+  if (clickable) {
+    stationHitAreas.push({ x, y: y - h / 2, w, h, cx: st.x });
+  }
+}
+// ★ スクロール位置を保存（手動更新対策）
+const scrollContainer = document.getElementById("scroll-container");
+
+scrollContainer.addEventListener("scroll", () => {
+  localStorage.setItem("scrollLeft", scrollContainer.scrollLeft);
+});
+
+
+// ===============================
+// データ取得
+// ===============================
+
+
+async function fetchTrainData() {
+  if (fetching) return lastTrains;
+  fetching = true;
+
+  try {
+    const res = await fetch(
+      "https://jrsanyo1.hayato-110802.workers.dev/",
+      { cache: "no-store" }
+    );
+    const data = await res.json();
+    lastTrains = data.trains || lastTrains;
+  } catch {
+    console.warn("fetch失敗：前回データ使用");
+  } finally {
+    fetching = false;
+  }
+  return lastTrains;
+}
+
+// ===============================
+// 線路判定（複線・方向のみ）
+// ===============================
+function getLastDigit(train) {
+  const m = String(train.no || "").match(/(\d)(?!.*\d)/);
+  return m ? Number(m[1]) : null;
+}
+
+function getTrackKey(train) {
+  const last = getLastDigit(train);
+  if (last === null) return "up";
+  return (last % 2 === 1) ? "up" : "down";
+}
+// ===============================
+// 停滞管理（localStorage）
+// ===============================
+const stayMap = JSON.parse(localStorage.getItem("stayMap") || "{}");
+
+function updateStay(trainKey, x, isStation) {
+  const now = Date.now();
+  const s = stayMap[trainKey] || { x, t: now, station: isStation };
+
+  if (Math.abs(s.x - x) < 5 && s.station === isStation) {
+    // 継続
+  } else {
+    s.x = x;
+    s.t = now;
+    s.station = isStation;
+  }
+
+  stayMap[trainKey] = s;
+  localStorage.setItem("stayMap", JSON.stringify(stayMap));
+  return now - s.t;
+}
+
+// ===============================
+// 両数 → 丸数字（①〜⑭）変換
+// ===============================
+function carsToCircle(num) {
+  const circles = [
+    "", "①","②","③","④","⑤","⑥","⑦",
+    "⑧","⑨","⑩","⑪","⑫","⑬","⑭"
+  ];
+  return circles[num] || "";
+}
+// ===============================
+// 列車描画
+// ===============================
+function drawTrains(trains) {
+  const used = {};
+  ctx.font = "12px monospace";
+
+  trains.forEach(train => {
+    const [from, toRaw] = train.pos.split("_");
+    const to = (toRaw === "####") ? from : toRaw;
+
+    const s1 = stations.find(s => s.code === from);
+    const s2 = stations.find(s => s.code === to);
+    if (!s1 || !s2) return;
+
+    const trackKey = getTrackKey(train);
+    const baseY = TRACK_Y[trackKey];
+
+    const i1 = stations.indexOf(s1);
+    const i2 = stations.indexOf(s2);
+
+    let ratio = 0;
+    if (i1 !== i2) {
+      const num = parseInt(train.no.match(/\d+/)?.[0] || 0, 10);
+      ratio = (num % 2 === 0) ? 1/3 : 2/3;
+    }
+
+    const x = s1.x + (s2.x - s1.x) * ratio;
+
+    const sectionKey = `${Math.min(i1,i2)}-${Math.max(i1,i2)}`;
+    const slot = `${trackKey}_${sectionKey}`;
+
+    const y = baseY + (used[slot] || 0) * 28;
+    used[slot] = (used[slot] || 0) + 1;
+
+    const type = train.displayType || "";
+    let bg = "#FFFF66";
+    if (type.includes("特急")) bg = "#9A4A4A";
+    else if (type.includes("新快速")) bg = "#3399FF";
+    else if (type.includes("快速")) bg = "#FFA500";
+    else if (type.includes("普通")) bg = "#6EDC3A";
+
+    const noColor =
+      (type.includes("特急") || type.includes("新快速")) ? "white" : "black";
+
+    const delay = train.delayMinutes || 0;
+    const delayText = delay > 0 ? String(delay) : "";
+
+    const noText = train.no;
+
+// ★ 両数取得（numberOfCars）
+const cars = Number(train.numberOfCars) || 0;
+const carsText = carsToCircle(cars);
+
+// ★ 行き先＋両数（⑧など）を合成
+const infoText = ` ${type} ${train.dest.text}${carsText}`;
+
+    const noW = ctx.measureText(noText).width + 10;
+    const infoW = ctx.measureText(infoText).width + 10;
+    const delayW = delayText ? ctx.measureText(delayText).width + 8 : 0;
+    const h = 22;
+    const totalW = noW + infoW + delayW;
+    const leftX = x - totalW / 2;
+
+    const trainKey = train.no + "_" + train.pos;
+const stayMs = updateStay(trainKey, x, from === to);
+
+
+    // 赤帯：1分以上駅直上
+    if (from === to && stayMs >= 60000) {
+      ctx.fillStyle = "red";
+      ctx.fillRect(leftX - 6, y - h/2, 6, h);
+      ctx.fillRect(leftX + totalW, y - h/2, 6, h);
+    }
+
+    // ×印：10分以上不動（赤丸＋黒枠＋白×）
+if (stayMs >= 600000) {
+  const r = 8; // 丸の半径
+  const cx = leftX - 20; // 列車枠から十分離す
+  const cy = y;
+
+  // 赤丸（塗り）
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = "red";
+  ctx.fill();
+
+  // 白い×
+  ctx.fillStyle = "white";
+  ctx.font = "12px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("×", cx, cy);
+}
+
+    ctx.fillStyle = "white";
+    ctx.fillRect(leftX, y - h/2, totalW, h);
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(leftX, y - h/2, noW, h);
+
+    ctx.fillStyle = noColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(noText, leftX + noW/2, y);
+
+    ctx.fillStyle = "black";
+    ctx.fillText(infoText, leftX + noW + infoW/2, y);
+
+    if (delayText) {
+      ctx.fillStyle = "red";
+      ctx.fillText(delayText, leftX + noW + infoW + delayW/2, y);
+    }
+  });
+}
+
+// ===============================
+async function update() {
+  // ★ 前景（列車）のみクリア
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // ★ 駅クリック領域だけは毎回再登録
+  stationHitAreas.length = 0;
+
+  // ★ 背景は描かない（drawBackground() は呼ばない）
+
+  // ★ 前回データで即描画（チラつき防止）
+  // ★ 前回データがある場合のみ描画
+if (lastTrains.length > 0) {
+  drawTrains(lastTrains);
+}
+
+  // ★ 最新データ取得
+  const trains = await fetchTrainData();
+
+  // ★ 上書き描画
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawTrains(trains);
+
+  document.getElementById("time").textContent =
+    "更新: " + new Date().toLocaleTimeString();
+}
+
+drawBackground();
+  // ★ 保存されているスクロール位置を復元
+const savedScroll = localStorage.getItem("scrollLeft");
+if (savedScroll !== null) {
+  document.getElementById("scroll-container").scrollLeft = Number(savedScroll);
+}
+update();
+setInterval(update, 60000);
+</script>
+</body>
+</html>
