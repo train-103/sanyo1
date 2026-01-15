@@ -203,7 +203,15 @@ function getLastDigit(train) {
   const m = String(train.no || "").match(/(\d)(?!.*\d)/);
   return m ? Number(m[1]) : null;
 }
-
+  
+// ===============================
+// 普通列車判定
+// ===============================
+function isLocalTrain(train) {
+  const type = train.displayType || "";
+  return type.includes("普通");
+}
+  
 function getTrackKey(train) {
   const last = getLastDigit(train);
   if (last === null) return "up";
@@ -213,11 +221,20 @@ function getTrackKey(train) {
 // 停滞管理（localStorage）
 // ===============================
 const stayMap = JSON.parse(localStorage.getItem("stayMap") || "{}");
-
+const crossMap = JSON.parse(localStorage.getItem("crossMap") || "{}");
+  
 function updateStay(trainKey, x, isStation) {
   const now = Date.now();
   const s = stayMap[trainKey] || { x, t: now, station: isStation };
 
+  const redBandMap = JSON.parse(
+  localStorage.getItem("redBandMap") || "{}"
+);
+  
+function updateStay(trainKey, x, isStation) {
+  const now = Date.now();
+  const s = stayMap[trainKey] || { x, t: now, station: isStation };
+  
   if (Math.abs(s.x - x) < 5 && s.station === isStation) {
     // 継続
   } else {
@@ -241,7 +258,10 @@ function drawTrains(trains) {
 
   trains.forEach(train => {
     const [from, toRaw] = train.pos.split("_");
-    const to = (toRaw === "####") ? from : toRaw;
+      // ★ 停車中判定（今回の修正ポイント）
+const isStationary = (toRaw === "####");
+// ★ 描画用の to（駅間計算用）
+const to = isStationary ? from : toRaw;
 
     const s1 = stations.find(s => s.code === from);
     const s2 = stations.find(s => s.code === to);
@@ -296,17 +316,65 @@ const infoText = ` ${type} ${destText}`;
 
     const trainKey = train.no + "_" + train.pos;
 const stayMs = updateStay(trainKey, x, from === to);
-
-
-    // 赤帯：1分以上駅直上
-    if (from === to && stayMs >= 60000) {
-      ctx.fillStyle = "red";
-      ctx.fillRect(leftX - 6, y - h/2, 6, h);
-      ctx.fillRect(leftX + totalW, y - h/2, 6, h);
-    }
-
-    // ×印：10分以上不動（赤丸＋黒枠＋白×）
 if (stayMs >= 600000) {
+  crossMap[trainKey] = true;
+  localStorage.setItem("crossMap", JSON.stringify(crossMap));
+}
+
+    // 赤帯関連
+const isLocal = isLocalTrain(train);
+let showRedBand = false;
+
+// ===============================
+// 普通：駅停車なら即赤帯
+// ===============================
+if (isLocal && isStationary) {
+  showRedBand = true;
+}
+
+// ===============================
+// 普通以外：交互45秒判定
+// ===============================
+if (!isLocal && isStationary) {
+  const r = redBandMap[trainKey] || {
+    phase: "record", // record → check → record → check
+    baseX: x
+  };
+
+  if (r.phase === "record") {
+    // 基準位置を記録するだけ
+    r.baseX = x;
+    r.phase = "check";
+  } else {
+  // check フェーズ
+  if (Math.abs(r.baseX - x) < 5) {
+    showRedBand = true;
+
+    // ★ 赤帯を出した場合は phase を維持
+    // 次の更新まで保持する
+  } else {
+    // 動いていたら記録フェーズへ戻す
+    r.phase = "record";
+  }
+}
+
+  redBandMap[trainKey] = r;
+  localStorage.setItem("redBandMap", JSON.stringify(redBandMap));
+}
+
+// ===============================
+// 赤帯描画
+// ===============================
+if (showRedBand) {
+  ctx.fillStyle = "red";
+  ctx.fillRect(leftX - 6, y - h/2, 6, h);
+  ctx.fillRect(leftX + totalW, y - h/2, 6, h);
+}
+
+     // ×印：10分以上不動（赤丸＋黒枠＋白×）
+if (crossMap[trainKey]) {
+  ctx.save();  // ← これが重要
+  
   const r = 8; // 丸の半径
   const cx = leftX - 20; // 列車枠から十分離す
   const cy = y;
@@ -317,12 +385,14 @@ if (stayMs >= 600000) {
   ctx.fillStyle = "red";
   ctx.fill();
 
-  // 白い×
+  // ×印（太字）
   ctx.fillStyle = "white";
-  ctx.font = "12px monospace";
+  ctx.font = "bold 15px monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("×", cx, cy);
+
+  ctx.restore(); // ← 状態を完全に戻す
 }
 
     ctx.fillStyle = "white";
@@ -380,12 +450,9 @@ if (savedScroll !== null) {
   document.getElementById("scroll-container").scrollLeft = Number(savedScroll);
 }
 update();
-setInterval(update, 60000);
+setInterval(update, 45000);
 </script>
 </body>
-
 </html>
-
-
 
 
