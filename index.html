@@ -222,15 +222,11 @@ function getTrackKey(train) {
 // ===============================
 const stayMap = JSON.parse(localStorage.getItem("stayMap") || "{}");
 const crossMap = JSON.parse(localStorage.getItem("crossMap") || "{}");
-  
-function updateStay(trainKey, x, isStation) {
-  const now = Date.now();
-  const s = stayMap[trainKey] || { x, t: now, station: isStation };
 
-  const redBandMap = JSON.parse(
+const redBandMap = JSON.parse(
   localStorage.getItem("redBandMap") || "{}"
 );
-  
+
 function updateStay(trainKey, x, isStation) {
   const now = Date.now();
   const s = stayMap[trainKey] || { x, t: now, station: isStation };
@@ -454,6 +450,3 @@ setInterval(update, 45000);
 </script>
 </body>
 </html>
-
-
-
